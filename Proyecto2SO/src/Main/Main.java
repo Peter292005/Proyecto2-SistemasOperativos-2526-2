@@ -9,32 +9,30 @@ package Main;
  * @author Peter
  */
 
-import Estructuras.ColaEnlazada;
-import Estructuras.ListaEnlazada;
+import Filesystem.Archivo;
+import Filesystem.Directorio;
+import Filesystem.Disco;
 
 public class Main {
     public static void main(String[] args) {
-        ListaEnlazada<String> lista = new ListaEnlazada<>();
-        lista.agregar("archivo1.txt");
-        lista.agregar("archivo2.txt");
-        lista.agregarAlInicio("root");
+        Directorio root = new Directorio("root", "admin");
+        Directorio documentos = new Directorio("documentos", "peter");
+        Archivo archivo1 = new Archivo("tarea.txt", "peter", 3);
+        Archivo archivo2 = new Archivo("notas.doc", "peter", 2);
 
-        System.out.println("Lista: " + lista);
-        System.out.println("Elemento en índice 1: " + lista.obtener(1));
-        System.out.println("Contiene archivo2.txt: " + lista.contiene("archivo2.txt"));
-        System.out.println("Eliminado: " + lista.eliminar(1));
-        System.out.println("Lista final: " + lista);
+        root.agregarHijo(documentos);
+        documentos.agregarHijo(archivo1);
+        documentos.agregarHijo(archivo2);
 
-        ColaEnlazada<String> cola = new ColaEnlazada<>();
-        cola.encolar("P1");
-        cola.encolar("P2");
-        cola.encolar("P3");
+        System.out.println(root);
+        System.out.println(documentos);
+        System.out.println(archivo1);
+        System.out.println("Ruta de archivo1: " + archivo1.getRutaCompleta());
 
-        System.out.println("Cola: " + cola);
-        System.out.println("Frente: " + cola.frente());
-        System.out.println("Desencolado: " + cola.desencolar());
-        System.out.println("Cola final: " + cola);
+        Disco disco = new Disco(20);
+        System.out.println(disco);
+        System.out.println("Bloque 0: " + disco.obtenerBloque(0));
+        System.out.println("Bloques libres: " + disco.contarBloquesLibres());
     }
 }
-
 
