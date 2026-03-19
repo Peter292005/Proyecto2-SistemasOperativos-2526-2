@@ -142,4 +142,17 @@ public class ListaEnlazada<T> {
         sb.append("]");
         return sb.toString();
     }
+    public void set(int indice, T dato) {
+    validarIndice(indice);
+
+    Nodo<T> actual = cabeza;
+    int contador = 0;
+
+    while (contador < indice) {
+        actual = actual.getSiguiente();
+        contador++;
+    }
+
+    actual.setDato(dato);
+}
 }
