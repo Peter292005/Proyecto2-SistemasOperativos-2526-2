@@ -9,30 +9,35 @@ package Main;
  * @author Peter
  */
 
+
 import Filesystem.Archivo;
-import Filesystem.Directorio;
 import Filesystem.Disco;
 
 public class Main {
     public static void main(String[] args) {
-        Directorio root = new Directorio("root", "admin");
-        Directorio documentos = new Directorio("documentos", "peter");
+        Disco disco = new Disco(10);
+
         Archivo archivo1 = new Archivo("tarea.txt", "peter", 3);
-        Archivo archivo2 = new Archivo("notas.doc", "peter", 2);
+        Archivo archivo2 = new Archivo("foto.png", "peter", 2);
 
-        root.agregarHijo(documentos);
-        documentos.agregarHijo(archivo1);
-        documentos.agregarHijo(archivo2);
+        boolean asignado1 = disco.asignarBloquesAArchivo(archivo1);
+        boolean asignado2 = disco.asignarBloquesAArchivo(archivo2);
 
-        System.out.println(root);
-        System.out.println(documentos);
-        System.out.println(archivo1);
-        System.out.println("Ruta de archivo1: " + archivo1.getRutaCompleta());
+        System.out.println("Archivo 1 asignado: " + asignado1);
+        System.out.println("Primer bloque archivo1: " + archivo1.getPrimerBloque());
+        System.out.println("Cadena archivo1: " + disco.obtenerCadenaBloques(archivo1));
 
-        Disco disco = new Disco(20);
-        System.out.println(disco);
-        System.out.println("Bloque 0: " + disco.obtenerBloque(0));
-        System.out.println("Bloques libres: " + disco.contarBloquesLibres());
+        System.out.println("Archivo 2 asignado: " + asignado2);
+        System.out.println("Primer bloque archivo2: " + archivo2.getPrimerBloque());
+        System.out.println("Cadena archivo2: " + disco.obtenerCadenaBloques(archivo2));
+
+        System.out.println("Bloques libres antes de liberar: " + disco.contarBloquesLibres());
+
+        disco.liberarBloquesDeArchivo(archivo1);
+
+        System.out.println("Archivo 1 liberado.");
+        System.out.println("Primer bloque archivo1: " + archivo1.getPrimerBloque());
+        System.out.println("Cadena archivo1 despues de liberar: " + disco.obtenerCadenaBloques(archivo1));
+        System.out.println("Bloques libres despues de liberar: " + disco.contarBloquesLibres());
     }
 }
-
