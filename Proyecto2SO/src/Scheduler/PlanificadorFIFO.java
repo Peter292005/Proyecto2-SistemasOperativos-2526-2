@@ -8,6 +8,23 @@ package Scheduler;
  *
  * @author Peter
  */
-public class PlanificadorFIFO {
-    
+import Estructuras.ListaEnlazada;
+import Procesos.SolicitudIO;
+
+public class PlanificadorFIFO extends PlanificadorDisco {
+
+    public PlanificadorFIFO(int cabezaActual) {
+        super(cabezaActual);
+    }
+
+    @Override
+    public ListaEnlazada<SolicitudIO> planificar(ListaEnlazada<SolicitudIO> solicitudes) {
+        ListaEnlazada<SolicitudIO> resultado = new ListaEnlazada<>();
+
+        for (int i = 0; i < solicitudes.tamano(); i++) {
+            resultado.agregar(solicitudes.obtener(i));
+        }
+
+        return resultado;
+    }
 }

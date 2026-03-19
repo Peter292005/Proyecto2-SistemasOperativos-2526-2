@@ -8,6 +8,23 @@ package Scheduler;
  *
  * @author Peter
  */
-public class PlanificadorDisco {
-    
+import Estructuras.ListaEnlazada;
+import Procesos.SolicitudIO;
+
+public abstract class PlanificadorDisco {
+    protected int cabezaActual;
+
+    public PlanificadorDisco(int cabezaActual) {
+        this.cabezaActual = cabezaActual;
+    }
+
+    public int getCabezaActual() {
+        return cabezaActual;
+    }
+
+    public void setCabezaActual(int cabezaActual) {
+        this.cabezaActual = cabezaActual;
+    }
+
+    public abstract ListaEnlazada<SolicitudIO> planificar(ListaEnlazada<SolicitudIO> solicitudes);
 }
