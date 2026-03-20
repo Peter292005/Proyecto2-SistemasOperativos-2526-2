@@ -1,0 +1,78 @@
+{
+  "disco": {
+    "cantidadBloques": 10,
+    "bloques": [
+      {
+        "indice": 0,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 1,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 2,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 3,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 4,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 5,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 6,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 7,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 8,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      },
+      {
+        "indice": 9,
+        "libre": true,
+        "nombreArchivo": null,
+        "siguienteBloque": -1
+      }
+    ]
+  },
+  "journal": [
+    {
+      "idEntrada": 1,
+      "operacion": "CREATE",
+      "nombreArchivo": "reporte.txt",
+      "propietario": "peter",
+      "tamanoEnBloques": 3,
+      "primerBloque": 0,
+      "estado": "CONFIRMADA"
+    }
+  ]
+}

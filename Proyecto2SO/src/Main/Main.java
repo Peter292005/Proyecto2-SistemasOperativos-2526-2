@@ -8,44 +8,46 @@ package Main;
  *
  * @author Peter
  */
-import Concurrencia.GestorLocks;
-import Procesos.Proceso;
-import Procesos.SolicitudIO;
+import Filesystem.Archivo;
+import Filesystem.Disco;
+import Journal.EntradaJournal;
+import Journal.JournalManager;
+import Persistencia.PersistenciaJSON;
 import Procesos.TipoOperacionIO;
 
 public class Main {
     public static void main(String[] args) {
-        GestorLocks gestor = new GestorLocks();
+        try {
+            Disco disco = new Disco(10);
+            JournalManager journal = new JournalManager();
+            PersistenciaJSON persistencia = new PersistenciaJSON();
 
-        Proceso p1 = new Proceso(1, "P1");
-        Proceso p2 = new Proceso(2, "P2");
-        Proceso p3 = new Proceso(3, "P3");
+            Archivo archivo = new Archivo("reporte.txt", "peter", 3);
 
-        SolicitudIO s1 = new SolicitudIO(1, p1, TipoOperacionIO.READ, "archivo.txt", 10);
-        SolicitudIO s2 = new SolicitudIO(2, p2, TipoOperacionIO.READ, "archivo.txt", 10);
-        SolicitudIO s3 = new SolicitudIO(3, p3, TipoOperacionIO.WRITE, "archivo.txt", 10);
+            boolean asignado = disco.asignarBloquesAArchivo(archivo);
+            System.out.println("Archivo asignado: " + asignado);
+            System.out.println("Primer bloque: " + archivo.getPrimerBloque());
+            System.out.println("Cadena: " + disco.obtenerCadenaBloques(archivo));
 
-        System.out.println("P1 solicita lectura: " + gestor.solicitarLock(s1));
-        System.out.println("P2 solicita lectura: " + gestor.solicitarLock(s2));
-        System.out.println("P3 solicita escritura: " + gestor.solicitarLock(s3));
+            EntradaJournal entrada = journal.registrarOperacionPendiente(TipoOperacionIO.CREATE, archivo);
+            entrada.setPrimerBloque(archivo.getPrimerBloque());
 
-        System.out.println("Estado locks:");
-        System.out.println(gestor);
+            System.out.println("Journal antes de recuperación:");
+            System.out.println(journal);
 
-        System.out.println("Estados procesos:");
-        System.out.println(p1);
-        System.out.println(p2);
-        System.out.println(p3);
+            // Simulación de fallo: NO confirmamos la operación
 
-        gestor.liberarLock(s1);
-        System.out.println("Después de liberar lectura de P1:");
-        System.out.println(gestor);
+            journal.recuperarOperacionesPendientes(disco);
 
-        gestor.liberarLock(s2);
-        System.out.println("Después de liberar lectura de P2:");
-        System.out.println(gestor);
+            System.out.println("Journal después de recuperación:");
+            System.out.println(journal);
+            System.out.println("Bloques libres después de recuperar: " + disco.contarBloquesLibres());
 
-        System.out.println("Estado final de P3:");
-        System.out.println(p3);
+            persistencia.guardarEstado("estado_simulador.json", disco, journal);
+            System.out.println("Estado guardado en JSON correctamente.");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
