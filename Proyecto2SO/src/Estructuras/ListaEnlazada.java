@@ -155,4 +155,5 @@ public class ListaEnlazada<T> {
 
     actual.setDato(dato);
 }
+    
 }
