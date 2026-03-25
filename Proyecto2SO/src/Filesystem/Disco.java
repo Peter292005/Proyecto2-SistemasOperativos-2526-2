@@ -116,4 +116,60 @@ public class Disco {
                 ", bloquesLibres=" + contarBloquesLibres() +
                 '}';
     }
+    public void limpiarDisco() {
+    for (int i = 0; i < bloques.tamano(); i++) {
+        bloques.obtener(i).liberar();
+    }
+}
+
+public boolean puedePrecargarArchivo(int primerBloque, int cantidadBloquesArchivo) {
+    if (primerBloque < 0 || cantidadBloquesArchivo <= 0) {
+        return false;
+    }
+
+    if (primerBloque + cantidadBloquesArchivo > this.cantidadBloques) {
+        return false;
+    }
+
+    for (int i = primerBloque; i < primerBloque + cantidadBloquesArchivo; i++) {
+        if (!obtenerBloque(i).estaLibre()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+public boolean precargarArchivoEnBloques(String nombreArchivo, int primerBloque, int cantidadBloquesArchivo) {
+    if (!puedePrecargarArchivo(primerBloque, cantidadBloquesArchivo)) {
+        return false;
+    }
+
+    for (int offset = 0; offset < cantidadBloquesArchivo; offset++) {
+        int actual = primerBloque + offset;
+        int siguiente = (offset == cantidadBloquesArchivo - 1) ? -1 : actual + 1;
+        obtenerBloque(actual).ocupar(nombreArchivo, siguiente);
+    }
+
+    return true;
+}
+public void liberarBloquesPorNombreArchivo(String nombreArchivo) {
+    for (int i = 0; i < bloques.tamano(); i++) {
+        BloqueDisco bloque = bloques.obtener(i);
+        if (!bloque.estaLibre() && nombreArchivo.equals(bloque.getNombreArchivo())) {
+            bloque.liberar();
+        }
+    }
+}
+
+public int contarBloquesPorNombreArchivo(String nombreArchivo) {
+    int count = 0;
+    for (int i = 0; i < bloques.tamano(); i++) {
+        BloqueDisco bloque = bloques.obtener(i);
+        if (!bloque.estaLibre() && nombreArchivo.equals(bloque.getNombreArchivo())) {
+            count++;
+        }
+    }
+    return count;
+}
 }

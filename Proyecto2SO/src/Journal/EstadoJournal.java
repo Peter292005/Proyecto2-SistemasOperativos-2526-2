@@ -10,5 +10,6 @@ package Journal;
  */
 public enum EstadoJournal {
     PENDIENTE,
-    CONFIRMADA
+    CONFIRMADA,
+    UNDO
 }

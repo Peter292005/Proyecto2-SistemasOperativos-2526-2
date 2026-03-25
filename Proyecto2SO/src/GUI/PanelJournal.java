@@ -24,11 +24,15 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
+import java.util.ArrayList;
+import java.util.List;
 
 public class PanelJournal extends JPanel {
-    private final DefaultListModel<EntradaJournal> modelo;
-    private final JList<EntradaJournal> lista;
+    private final DefaultListModel<String> modelo;
+    private final JList<String> lista;
     private final JLabel lblEstadoSistema;
+
+    private final List<String> eventosVisuales;
 
     public PanelJournal() {
         setLayout(new BorderLayout(8, 8));
@@ -38,6 +42,8 @@ public class PanelJournal extends JPanel {
                 BorderFactory.createLineBorder(TemaUI.BORDE, 1),
                 new EmptyBorder(10, 10, 10, 10)
         ));
+
+        eventosVisuales = new ArrayList<>();
 
         modelo = new DefaultListModel<>();
         lista = new JList<>(modelo);
@@ -60,13 +66,28 @@ public class PanelJournal extends JPanel {
     public void refrescar(JournalManager journal) {
         modelo.clear();
 
-        if (journal == null || journal.getEntradas() == null) {
-            return;
+        if (journal != null && journal.getEntradas() != null) {
+            for (int i = 0; i < journal.getEntradas().tamano(); i++) {
+                EntradaJournal entrada = journal.getEntradas().obtener(i);
+                String estado = entrada.getEstado().toString();
+                modelo.addElement("[JOURNAL] " + entrada.getOperacion() + " '" +
+                        entrada.getNombreArchivo() + "' : " + estado);
+            }
         }
 
-        for (int i = 0; i < journal.getEntradas().tamano(); i++) {
-            modelo.addElement(journal.getEntradas().obtener(i));
+        for (String evento : eventosVisuales) {
+            modelo.addElement(evento);
         }
+    }
+
+    public void agregarEvento(String texto) {
+        eventosVisuales.add(texto);
+        modelo.addElement(texto);
+    }
+
+    public void limpiarEventos() {
+        eventosVisuales.clear();
+        modelo.clear();
     }
 
     public void marcarFalloSimulado() {
@@ -79,7 +100,7 @@ public class PanelJournal extends JPanel {
         lblEstadoSistema.setForeground(TemaUI.EXITO);
     }
 
-    private static class RenderJournal extends JLabel implements ListCellRenderer<EntradaJournal> {
+    private static class RenderJournal extends JLabel implements ListCellRenderer<String> {
         public RenderJournal() {
             setOpaque(true);
             setBorder(new EmptyBorder(8, 10, 8, 10));
@@ -88,26 +109,33 @@ public class PanelJournal extends JPanel {
 
         @Override
         public Component getListCellRendererComponent(
-                JList<? extends EntradaJournal> list,
-                EntradaJournal value,
+                JList<? extends String> list,
+                String value,
                 int index,
                 boolean isSelected,
                 boolean cellHasFocus
         ) {
-            String estado = value.getEstado().toString();
-            setText(value.getOperacion() + " '" + value.getNombreArchivo() + "' : " + estado);
+            setText(value);
 
             if (isSelected) {
                 setBackground(TemaUI.ACENTO);
                 setForeground(Color.WHITE);
-            } else {
-                setBackground(new Color(18, 30, 50));
-                if (value.getEstado() == EstadoJournal.PENDIENTE) {
-                    setForeground(TemaUI.WARNING);
-                } else {
-                    setForeground(TemaUI.EXITO);
-                }
+                return this;
             }
+
+            setBackground(new Color(18, 30, 50));
+
+            if (value.contains("PENDIENTE")) {
+    setForeground(TemaUI.WARNING);
+} else if (value.contains("UNDO")) {
+    setForeground(new Color(251, 191, 36));
+} else if (value.contains("CONFIRMADA") || value.contains("RECOVERY")) {
+    setForeground(TemaUI.EXITO);
+} else if (value.contains("FALLO")) {
+    setForeground(TemaUI.ERROR);
+} else {
+    setForeground(TemaUI.TEXTO);
+}
 
             return this;
         }
