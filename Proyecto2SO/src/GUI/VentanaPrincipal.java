@@ -24,6 +24,27 @@ import Scheduler.PlanificadorCSCAN;
 import Scheduler.PlanificadorFIFO;
 import Scheduler.PlanificadorSCAN;
 import Scheduler.PlanificadorSSTF;
+import Pruebas.AplicadorCasoPrueba;
+import Pruebas.CargadorCasoJSON;
+import Pruebas.CasoPrueba;
+import Pruebas.ContextoCasoPrueba;
+import Pruebas.SimuladorPoliticas;
+import javax.swing.ScrollPaneConstants;
+import javax.swing.Timer;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import javax.swing.SwingUtilities;
+
+import java.awt.GridBagLayout;
+import java.awt.Graphics;
+import java.awt.RenderingHints;
+import javax.swing.JPopupMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JFileChooser;
+import javax.swing.filechooser.FileNameExtensionFilter;
+
+import javax.swing.SwingUtilities;
+import java.awt.Font;
 
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
@@ -53,11 +74,20 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
+import javax.swing.Box;
+import javax.swing.Icon;
+import java.awt.Graphics2D;
+import java.awt.BasicStroke;
+
 
 public class VentanaPrincipal extends JFrame {
     private final SistemaArchivos sistema;
     private final JournalManager journal;
     private final GestorLocks gestorLocks;
+    private VentanaProcesos ventanaProcesos;
+
+    
+    private final ListaEnlazada<SolicitudIO> solicitudesActualesCaso;
 
     private final ListaEnlazada<Proceso> procesosSistema;
     private final ListaEnlazada<SolicitudIO> historialSolicitudes;
@@ -71,6 +101,21 @@ public class VentanaPrincipal extends JFrame {
 
     private JTable tablaAsignacion;
     private DefaultTableModel modeloTablaAsignacion;
+    private Timer timerSimulacion;
+private ListaEnlazada<SolicitudIO> ordenSimulacionActual;
+private int indiceSimulacion = 0;
+private SolicitudIO solicitudActiva = null;
+private boolean simulacionPreparada = false;
+private boolean simulacionEnCurso = false;
+private JButton btnCargarCaso;
+private JButton btnPaso;
+
+
+private JComboBox<String> comboVelocidad;
+    
+    private CasoPrueba casoPruebaActual;
+private ContextoCasoPrueba contextoCasoActual;
+private final SimuladorPoliticas simuladorPoliticas = new SimuladorPoliticas();
 
     private PanelDisco panelDisco;
     private PanelLogs panelLogs;
@@ -82,12 +127,21 @@ public class VentanaPrincipal extends JFrame {
     private PanelBarraCabezal panelBarraCabezal;
 
     private JComboBox<String> comboScheduler;
+    private JButton btnReanudar;
+private JButton btnInstantaneo;
+private JButton btnPausar;
+private JButton btnEjecutarCaso;
 
     private JLabel lblBloquesLibres;
     private JLabel lblBloquesOcupados;
     private JLabel lblSchedulerActivo;
     private JLabel lblCabezal;
     private JLabel lblSolicitudes;
+    
+    private JTabbedPane tabsCentro;
+private PanelCard cardJournalCentro;
+private PanelCard cardLocksCentro;
+private PanelCard cardProcesosCentro;
 
     private JRadioButton rbAdmin;
     private JRadioButton rbUsuario;
@@ -96,9 +150,14 @@ public class VentanaPrincipal extends JFrame {
         this.sistema = sistema;
         this.journal = journal;
         this.gestorLocks = new GestorLocks();
-
         this.procesosSistema = new ListaEnlazada<>();
-        this.historialSolicitudes = new ListaEnlazada<>();
+this.historialSolicitudes = new ListaEnlazada<>();
+this.solicitudesActualesCaso = new ListaEnlazada<>();
+this.ordenSimulacionActual = new ListaEnlazada<>();
+        
+        
+
+        
 
         configurarLookAndFeelBasico();
 
@@ -129,240 +188,343 @@ public class VentanaPrincipal extends JFrame {
         UIManager.put("ToolTip.border", BorderFactory.createLineBorder(TemaUI.BORDE));
     }
 
-    private JPanel crearHeader() {
-        JPanel header = new JPanel(new BorderLayout(10, 10));
-        header.setBackground(new Color(7, 16, 32));
-        header.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(TemaUI.BORDE_SUAVE, 1),
-                BorderFactory.createEmptyBorder(12, 16, 12, 16)
-        ));
+  private JPanel crearHeader() {
+    JPanel header = new JPanel(new BorderLayout(12, 12));
+    header.setBackground(new Color(7, 16, 32));
+    header.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(TemaUI.BORDE_SUAVE, 1),
+            BorderFactory.createEmptyBorder(14, 18, 14, 18)
+    ));
 
-        JLabel titulo = new JLabel("Simulador de Sistema de Archivos");
-        titulo.setForeground(new Color(240, 248, 255));
-        titulo.setFont(TemaUI.FUENTE_TITULO);
+    JLabel titulo = new JLabel("Simulador de Sistema de Archivos");
+    titulo.setForeground(new Color(240, 248, 255));
+    titulo.setFont(TemaUI.FUENTE_TITULO);
 
-        JPanel izquierda = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        izquierda.setOpaque(false);
-        izquierda.add(titulo);
+    JPanel filaSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+    filaSuperior.setOpaque(false);
+    filaSuperior.add(titulo);
 
-        JPanel derecha = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        derecha.setOpaque(false);
+    JPanel filaInferior = new JPanel(new BorderLayout(12, 0));
+    filaInferior.setOpaque(false);
 
-        comboScheduler = new JComboBox<>(new String[]{"FIFO", "SSTF", "SCAN", "C-SCAN"});
-        estilizarCombo(comboScheduler);
+    JPanel grupoPrincipal = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+    grupoPrincipal.setOpaque(false);
 
-        JButton btnCrearArchivo = crearBoton("Crear Archivo");
-        JButton btnCrearDirectorio = crearBoton("Crear Directorio");
-        JButton btnLeer = crearBoton("Leer");
-        JButton btnRenombrar = crearBoton("Renombrar");
-        JButton btnEliminar = crearBoton("Eliminar");
-        JButton btnSimularFallo = crearBotonPeligro("Simular Fallo");
+    comboScheduler = new JComboBox<>(new String[]{"FIFO", "SSTF", "SCAN", "C-SCAN"});
+    estilizarCombo(comboScheduler);
 
-        btnCrearArchivo.setBackground(TemaUI.BOTON_AZUL);
-        btnCrearDirectorio.setBackground(TemaUI.BOTON_VERDE);
-        btnLeer.setBackground(new Color(8, 145, 178));
-        btnRenombrar.setBackground(TemaUI.BOTON_MORADO);
-        btnEliminar.setBackground(new Color(153, 27, 27));
+    comboVelocidad = new JComboBox<>(new String[]{"Lenta", "Media", "Rápida"});
+    estilizarCombo(comboVelocidad);
+    comboVelocidad.setSelectedItem("Media");
+    comboVelocidad.addActionListener(e -> actualizarVelocidadEnCaliente());
 
-        btnCrearArchivo.addActionListener(e -> crearArchivoDesdeGUI());
-        btnCrearDirectorio.addActionListener(e -> crearDirectorioDesdeGUI());
-        btnLeer.addActionListener(e -> leerNodoDesdeGUI());
-        btnRenombrar.addActionListener(e -> renombrarNodoDesdeGUI());
-        btnEliminar.addActionListener(e -> eliminarNodoDesdeGUI());
-        btnSimularFallo.addActionListener(e -> simularFallo());
+    btnCargarCaso = crearBoton("Cargar");
+btnEjecutarCaso = crearBoton("Ejecutar");
+btnPausar = crearBoton("Pausar");
+btnReanudar = crearBoton("Reanudar");
+btnPaso = crearBoton("Paso a paso");
+btnInstantaneo = crearBoton("Instantánea");
 
-        JLabel lblScheduler = new JLabel("Scheduler:");
-        lblScheduler.setForeground(TemaUI.TEXTO);
-        lblScheduler.setFont(TemaUI.FUENTE_SUBTITULO);
+    btnCargarCaso.setBackground(new Color(30, 64, 175));
+    btnEjecutarCaso.setBackground(new Color(22, 163, 74));
+    btnPausar.setBackground(new Color(147, 51, 234));
+    btnReanudar.setBackground(new Color(79, 70, 229));
+    btnPaso.setBackground(new Color(8, 145, 178));
+    btnInstantaneo.setBackground(new Color(217, 119, 6));
 
-        derecha.add(lblScheduler);
-        derecha.add(comboScheduler);
-        derecha.add(btnCrearArchivo);
-        derecha.add(btnCrearDirectorio);
-        derecha.add(btnLeer);
-        derecha.add(btnRenombrar);
-        derecha.add(btnEliminar);
-        derecha.add(btnSimularFallo);
+    btnCargarCaso.addActionListener(e -> cargarCasoDesdeJSON());
+    btnEjecutarCaso.addActionListener(e -> ejecutarCasoActual());
+    btnPausar.addActionListener(e -> pausarSimulacion());
+    btnReanudar.addActionListener(e -> reanudarSimulacion());
+    btnPaso.addActionListener(e -> ejecutarPasoManual());
+    btnInstantaneo.addActionListener(e -> ejecutarCasoInstantaneo());
 
-        header.add(izquierda, BorderLayout.WEST);
-        header.add(derecha, BorderLayout.EAST);
+    JLabel lblScheduler = new JLabel("Scheduler:");
+    lblScheduler.setForeground(TemaUI.TEXTO);
+    lblScheduler.setFont(TemaUI.FUENTE_SUBTITULO);
 
-        return header;
-    }
+    JLabel lblVelocidad = new JLabel("Velocidad:");
+    lblVelocidad.setForeground(TemaUI.TEXTO);
+    lblVelocidad.setFont(TemaUI.FUENTE_SUBTITULO);
 
+    grupoPrincipal.add(lblScheduler);
+    grupoPrincipal.add(comboScheduler);
+    grupoPrincipal.add(Box.createHorizontalStrut(8));
+    grupoPrincipal.add(lblVelocidad);
+    grupoPrincipal.add(comboVelocidad);
+    grupoPrincipal.add(Box.createHorizontalStrut(14));
+    grupoPrincipal.add(btnCargarCaso);
+    grupoPrincipal.add(btnEjecutarCaso);
+    grupoPrincipal.add(btnPausar);
+    grupoPrincipal.add(btnReanudar);
+    grupoPrincipal.add(btnPaso);
+    grupoPrincipal.add(btnInstantaneo);
+
+   JButton btnMenu = crearBoton("☰ Menú");
+btnMenu.setBackground(new Color(51, 65, 85));
+
+JPopupMenu menu = new JPopupMenu();
+estilizarPopupMenu(menu);
+
+JMenuItem tituloSim = crearMenuTitulo("Simulación");
+JMenuItem itemLimpiar = crearMenuItem("Limpiar Disco", e -> limpiarDiscoCompleto());
+JMenuItem itemJ1 = crearMenuItem("Crear archivo fallo", e -> probarJ1Real());
+
+JMenuItem tituloArch = crearMenuTitulo("Operaciones de archivos");
+JMenuItem itemCrearArchivo = crearMenuItem("Crear Archivo", e -> crearArchivoDesdeGUI());
+JMenuItem itemCrearDirectorio = crearMenuItem("Crear Directorio", e -> crearDirectorioDesdeGUI());
+JMenuItem itemLeer = crearMenuItem("Leer", e -> leerNodoDesdeGUI());
+JMenuItem itemRenombrar = crearMenuItem("Renombrar", e -> renombrarNodoDesdeGUI());
+JMenuItem itemEliminar = crearMenuItem("Eliminar", e -> eliminarNodoDesdeGUI());
+
+JMenuItem tituloRec = crearMenuTitulo("Recuperación");
+JMenuItem itemFallo = crearMenuItem("Fallo/Recuperar", e -> simularFallo());
+
+menu.add(tituloSim);
+menu.add(itemLimpiar);
+menu.add(itemJ1);
+menu.addSeparator();
+
+menu.add(tituloArch);
+menu.add(itemCrearArchivo);
+menu.add(itemCrearDirectorio);
+menu.add(itemLeer);
+menu.add(itemRenombrar);
+menu.add(itemEliminar);
+menu.addSeparator();
+
+menu.add(tituloRec);
+menu.add(itemFallo);
+
+btnMenu.addActionListener(e -> {
+    boolean esAdmin = rbAdmin.isSelected();
+
+    itemLimpiar.setEnabled(esAdmin);
+    itemJ1.setEnabled(esAdmin);
+    itemCrearArchivo.setEnabled(esAdmin);
+    itemCrearDirectorio.setEnabled(esAdmin);
+    itemLeer.setEnabled(esAdmin);
+    itemRenombrar.setEnabled(esAdmin);
+    itemEliminar.setEnabled(esAdmin);
+    itemFallo.setEnabled(esAdmin);
+
+    menu.show(btnMenu, 0, btnMenu.getHeight());
+});
+
+    JPanel contenedorIzq = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+    contenedorIzq.setOpaque(false);
+    contenedorIzq.add(grupoPrincipal);
+
+    JPanel contenedorDer = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+    contenedorDer.setOpaque(false);
+    contenedorDer.add(btnMenu);
+
+    filaInferior.add(contenedorIzq, BorderLayout.WEST);
+    filaInferior.add(contenedorDer, BorderLayout.EAST);
+
+    header.add(filaSuperior, BorderLayout.NORTH);
+    header.add(filaInferior, BorderLayout.CENTER);
+
+    return header;
+}
+  
     private JSplitPane crearCentro() {
-        JSplitPane splitPrincipal = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitPrincipal.setBorder(null);
-        splitPrincipal.setDividerSize(6);
-        splitPrincipal.setContinuousLayout(true);
-        splitPrincipal.setLeftComponent(crearSidebarIzquierda());
-        splitPrincipal.setRightComponent(crearZonaDerechaGrande());
-        splitPrincipal.setResizeWeight(0.25);
-        return splitPrincipal;
-    }
+    JSplitPane splitPrincipal = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    splitPrincipal.setBorder(null);
+    splitPrincipal.setDividerSize(6);
+    splitPrincipal.setContinuousLayout(true);
+    splitPrincipal.setLeftComponent(crearSidebarIzquierda());
+    splitPrincipal.setRightComponent(crearZonaCentroConDerecha());
+    splitPrincipal.setResizeWeight(0.19);
+    return splitPrincipal;
+}
+    private JSplitPane crearZonaCentroConDerecha() {
+    JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    split.setBorder(null);
+    split.setDividerSize(6);
+    split.setContinuousLayout(true);
+    split.setLeftComponent(crearZonaCentral());
+    split.setRightComponent(crearSidebarDerechaPropiedades());
+    split.setResizeWeight(0.87);
+    return split;
+}
+    private JPanel crearSidebarDerechaPropiedades() {
+    JPanel sidebar = new JPanel(new BorderLayout(10, 10));
+    sidebar.setBackground(TemaUI.FONDO_APP);
+
+    PanelCard cardPropiedades = new PanelCard("Propiedades del Nodo");
+    panelPropiedadesNodo = new PanelPropiedadesNodo();
+    cardPropiedades.getContenido().add(panelPropiedadesNodo, BorderLayout.CENTER);
+
+    sidebar.add(cardPropiedades, BorderLayout.CENTER);
+    return sidebar;
+}
 
     private JPanel crearSidebarIzquierda() {
-        JPanel sidebar = new JPanel(new BorderLayout(10, 10));
-        sidebar.setBackground(TemaUI.FONDO_APP);
+    JPanel sidebar = new JPanel(new BorderLayout(10, 10));
+    sidebar.setBackground(TemaUI.FONDO_APP);
 
-        JPanel superior = new JPanel(new GridLayout(3, 1, 10, 10));
-        superior.setOpaque(false);
+    JPanel superior = new JPanel(new GridLayout(2, 1, 10, 10));
+    superior.setOpaque(false);
 
-        PanelCard cardControles = new PanelCard("Controles");
-        JPanel pControles = new JPanel(new GridLayout(5, 1, 8, 8));
-        pControles.setOpaque(false);
+    PanelCard cardControles = new PanelCard("Controles");
+    JPanel pControles = new JPanel(new GridLayout(5, 1, 8, 8));
+    pControles.setOpaque(false);
+   
 
-        rbAdmin = new JRadioButton("Administrador");
-        rbUsuario = new JRadioButton("Usuario");
-        estilizarRadio(rbAdmin);
-        estilizarRadio(rbUsuario);
-        rbAdmin.setSelected(true);
+    rbAdmin = new JRadioButton("Administrador");
+rbUsuario = new JRadioButton("Usuario");
+estilizarRadio(rbAdmin);
+estilizarRadio(rbUsuario);
+rbAdmin.setSelected(true);
 
-        ButtonGroup grupo = new ButtonGroup();
-        grupo.add(rbAdmin);
-        grupo.add(rbUsuario);
+    ButtonGroup grupo = new ButtonGroup();
+    grupo.add(rbAdmin);
+    grupo.add(rbUsuario);
+    rbAdmin.addActionListener(e -> actualizarPermisosPorRol());
+rbUsuario.addActionListener(e -> actualizarPermisosPorRol());
 
-        lblSchedulerActivo = crearBadge("Política: FIFO");
-        lblBloquesLibres = crearBadge("Bloques libres: 0");
-        lblBloquesOcupados = crearBadge("Bloques ocupados: 0");
+    lblSchedulerActivo = crearBadge("Política: FIFO");
+    lblBloquesLibres = crearBadge("Bloques libres: 0");
+    lblBloquesOcupados = crearBadge("Bloques ocupados: 0");
 
-        pControles.add(rbAdmin);
-        pControles.add(rbUsuario);
-        pControles.add(lblSchedulerActivo);
-        pControles.add(lblBloquesLibres);
-        pControles.add(lblBloquesOcupados);
-        cardControles.getContenido().add(pControles, BorderLayout.CENTER);
+    pControles.add(rbAdmin);
+    pControles.add(rbUsuario);
+    pControles.add(lblSchedulerActivo);
+    pControles.add(lblBloquesLibres);
+    pControles.add(lblBloquesOcupados);
+    cardControles.getContenido().add(pControles, BorderLayout.CENTER);
 
-        PanelCard cardArbol = new PanelCard("Sistema de Archivos");
-        DefaultMutableTreeNode raizVisual = new DefaultMutableTreeNode(sistema.getRoot());
-        modeloArbol = new DefaultTreeModel(raizVisual);
-        arbol = new JTree(modeloArbol);
-        estilizarTree(arbol);
-        arbol.addTreeSelectionListener(this::alSeleccionarNodo);
+    PanelCard cardArbol = new PanelCard("Sistema de Archivos");
+cardArbol.setPreferredSize(new Dimension(260, 420));
+    DefaultMutableTreeNode raizVisual = new DefaultMutableTreeNode(sistema.getRoot());
+    modeloArbol = new DefaultTreeModel(raizVisual);
+    arbol = new JTree(modeloArbol);
+    estilizarTree(arbol);
+    arbol.addTreeSelectionListener(this::alSeleccionarNodo);
 
-        JScrollPane scrollArbol = new JScrollPane(arbol);
-        estilizarScroll(scrollArbol);
-        cardArbol.getContenido().add(scrollArbol, BorderLayout.CENTER);
+    JScrollPane scrollArbol = new JScrollPane(arbol);
+estilizarScrollArbol(scrollArbol);
+cardArbol.getContenido().add(scrollArbol, BorderLayout.CENTER);
 
-        PanelCard cardPropiedades = new PanelCard("Propiedades del Nodo");
-        panelPropiedadesNodo = new PanelPropiedadesNodo();
-        cardPropiedades.getContenido().add(panelPropiedadesNodo, BorderLayout.CENTER);
+    superior.add(cardControles);
+    superior.add(cardArbol);
 
-        superior.add(cardControles);
-        superior.add(cardArbol);
-        superior.add(cardPropiedades);
+    sidebar.add(superior, BorderLayout.CENTER);
+    SwingUtilities.invokeLater(this::actualizarPermisosPorRol);
+    return sidebar;
+}
 
-        sidebar.add(superior, BorderLayout.CENTER);
-        return sidebar;
-    }
+  private void estilizarScrollArbol(JScrollPane scroll) {
+    scroll.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(37, 99, 235, 120), 1),
+            BorderFactory.createEmptyBorder(2, 2, 2, 2)
+    ));
+    scroll.getViewport().setBackground(new Color(10, 24, 44));
+    scroll.getVerticalScrollBar().setUnitIncrement(16);
+    scroll.getHorizontalScrollBar().setUnitIncrement(16);
+    scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+}
 
-    private JSplitPane crearZonaDerechaGrande() {
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        split.setBorder(null);
-        split.setDividerSize(6);
-        split.setContinuousLayout(true);
-        split.setLeftComponent(crearZonaCentral());
-        split.setRightComponent(crearSidebarDerecha());
-        split.setResizeWeight(0.74);
-        return split;
-    }
+   private JPanel crearZonaCentral() {
+    JPanel zona = new JPanel(new BorderLayout(10, 10));
+    zona.setBackground(TemaUI.FONDO_APP);
 
-    private JPanel crearZonaCentral() {
-        JPanel zona = new JPanel(new BorderLayout(10, 10));
-        zona.setBackground(TemaUI.FONDO_APP);
+    PanelCard cardEstadisticas = new PanelCard("Estadísticas");
+    JPanel stats = new JPanel(new GridLayout(1, 5, 10, 10));
+    stats.setOpaque(false);
 
-        PanelCard cardEstadisticas = new PanelCard("Estadísticas");
-        JPanel stats = new JPanel(new GridLayout(1, 5, 10, 10));
-        stats.setOpaque(false);
+    lblCabezal = crearStatPanel("Cabezal", "0");
+    lblSolicitudes = crearStatPanel("Solicitudes", "0");
+    JLabel lblA = crearStatPanel("Scheduler", "Activo");
+    JLabel lblB = crearStatPanel("Estado", "Operativo");
+    JLabel lblC = crearStatPanel("Modo", "Interactivo");
 
-        lblCabezal = crearStatPanel("Cabezal", "0");
-        lblSolicitudes = crearStatPanel("Solicitudes", "0");
-        JLabel lblA = crearStatPanel("Scheduler", "Activo");
-        JLabel lblB = crearStatPanel("Estado", "Operativo");
-        JLabel lblC = crearStatPanel("Modo", "Interactivo");
+    stats.add(lblA);
+    stats.add(lblB);
+    stats.add(lblC);
+    stats.add(lblCabezal);
+    stats.add(lblSolicitudes);
 
-        stats.add(lblA);
-        stats.add(lblB);
-        stats.add(lblC);
-        stats.add(lblCabezal);
-        stats.add(lblSolicitudes);
+    cardEstadisticas.getContenido().add(stats, BorderLayout.CENTER);
 
-        cardEstadisticas.getContenido().add(stats, BorderLayout.CENTER);
+    tabsCentro = new JTabbedPane();
+    estilizarTabs(tabsCentro);
 
-        JTabbedPane tabs = new JTabbedPane();
-        estilizarTabs(tabs);
+    JPanel panelDiscoCompleto = new JPanel(new BorderLayout(10, 10));
+    panelDiscoCompleto.setOpaque(false);
 
-        JPanel panelDiscoCompleto = new JPanel(new BorderLayout(10, 10));
-        panelDiscoCompleto.setOpaque(false);
+    panelBarraCabezal = new PanelBarraCabezal();
+    panelBarraCabezal.setPreferredSize(new Dimension(100, 72));
 
-        panelBarraCabezal = new PanelBarraCabezal();
-        panelBarraCabezal.setPreferredSize(new Dimension(100, 50));
+    panelDisco = new PanelDisco(sistema.getDisco());
 
-        panelDisco = new PanelDisco(sistema.getDisco());
+    JScrollPane scrollDisco = new JScrollPane(panelDisco);
+    scrollDisco.setBorder(BorderFactory.createLineBorder(TemaUI.BORDE, 1));
+    scrollDisco.getViewport().setBackground(TemaUI.CARD_2);
+    scrollDisco.getVerticalScrollBar().setUnitIncrement(16);
+    scrollDisco.getHorizontalScrollBar().setUnitIncrement(16);
 
-JScrollPane scrollDisco = new JScrollPane(panelDisco);
-scrollDisco.setBorder(BorderFactory.createLineBorder(TemaUI.BORDE, 1));
-scrollDisco.getViewport().setBackground(TemaUI.CARD_2);
-scrollDisco.getVerticalScrollBar().setUnitIncrement(16);
-scrollDisco.getHorizontalScrollBar().setUnitIncrement(16);
+    PanelCard cardDiscoInterno = new PanelCard("Disk Visualization");
+    cardDiscoInterno.getContenido().add(scrollDisco, BorderLayout.CENTER);
 
-PanelCard cardDiscoInterno = new PanelCard("Disk Visualization");
-cardDiscoInterno.getContenido().add(scrollDisco, BorderLayout.CENTER);
+    panelDiscoCompleto.add(panelBarraCabezal, BorderLayout.NORTH);
+    panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
 
-panelDiscoCompleto.add(panelBarraCabezal, BorderLayout.NORTH);
-panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
+    modeloTablaAsignacion = new DefaultTableModel(
+            new Object[]{"Nombre", "Propietario", "Bloques", "Primer bloque", "Color"}, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    tablaAsignacion = new JTable(modeloTablaAsignacion);
+    estilizarTabla(tablaAsignacion);
+    JScrollPane scrollTabla = new JScrollPane(tablaAsignacion);
+    estilizarScroll(scrollTabla);
+    PanelCard cardTabla = new PanelCard("Tabla de Asignación");
+    cardTabla.getContenido().add(scrollTabla, BorderLayout.CENTER);
 
-        modeloTablaAsignacion = new DefaultTableModel(
-                new Object[]{"Nombre", "Propietario", "Bloques", "Primer bloque", "Color"}, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-        tablaAsignacion = new JTable(modeloTablaAsignacion);
-        estilizarTabla(tablaAsignacion);
-        JScrollPane scrollTabla = new JScrollPane(tablaAsignacion);
-        estilizarScroll(scrollTabla);
-        PanelCard cardTabla = new PanelCard("Tabla de Asignación");
-        cardTabla.getContenido().add(scrollTabla, BorderLayout.CENTER);
+    panelSolicitudesIO = new PanelSolicitudesIO();
+    PanelCard cardSolicitudes = new PanelCard("Solicitudes de E/S");
+    cardSolicitudes.getContenido().add(panelSolicitudesIO, BorderLayout.CENTER);
 
-        panelSolicitudesIO = new PanelSolicitudesIO();
-        PanelCard cardSolicitudes = new PanelCard("Solicitudes de E/S");
-        cardSolicitudes.getContenido().add(panelSolicitudesIO, BorderLayout.CENTER);
+    cardJournalCentro = new PanelCard("Journal");
+    panelJournal = new PanelJournal();
+    cardJournalCentro.getContenido().add(panelJournal, BorderLayout.CENTER);
 
-        tabs.addTab("Disco", panelDiscoCompleto);
-        tabs.addTab("Asignación", cardTabla);
-        tabs.addTab("Solicitudes", cardSolicitudes);
+    cardLocksCentro = new PanelCard("Locks Activos");
+    panelLocksActivos = new PanelLocksActivos();
+    cardLocksCentro.getContenido().add(panelLocksActivos, BorderLayout.CENTER);
 
-        zona.add(cardEstadisticas, BorderLayout.NORTH);
-        zona.add(tabs, BorderLayout.CENTER);
+cardProcesosCentro = new PanelCard("Cola de Procesos");
+panelProcesos = new PanelProcesos();
 
-        return zona;
-    }
+JButton btnVerProcesosCompleto = crearBoton("Ver completo");
+btnVerProcesosCompleto.setBackground(new Color(37, 99, 235));
+btnVerProcesosCompleto.addActionListener(e -> abrirVentanaProcesos());
 
-    private JPanel crearSidebarDerecha() {
-        JPanel sidebar = new JPanel(new GridLayout(3, 1, 10, 10));
-        sidebar.setBackground(TemaUI.FONDO_APP);
+JPanel barraProcesos = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+barraProcesos.setOpaque(false);
+barraProcesos.add(btnVerProcesosCompleto);
 
-        PanelCard cardJournal = new PanelCard("Journal");
-        panelJournal = new PanelJournal();
-        cardJournal.getContenido().add(panelJournal, BorderLayout.CENTER);
+cardProcesosCentro.getContenido().add(barraProcesos, BorderLayout.NORTH);
+cardProcesosCentro.getContenido().add(panelProcesos, BorderLayout.CENTER);
 
-        PanelCard cardLocks = new PanelCard("Locks Activos");
-        panelLocksActivos = new PanelLocksActivos();
-        cardLocks.getContenido().add(panelLocksActivos, BorderLayout.CENTER);
+    tabsCentro.addTab("Disco", panelDiscoCompleto);
+    tabsCentro.addTab("Asignación", cardTabla);
+    tabsCentro.addTab("Solicitudes", cardSolicitudes);
+    tabsCentro.addTab("Journal", cardJournalCentro);
+    tabsCentro.addTab("Locks", cardLocksCentro);
+    tabsCentro.addTab("Procesos", cardProcesosCentro);
 
-        PanelCard cardProcesos = new PanelCard("Cola de Procesos");
-        panelProcesos = new PanelProcesos();
-        cardProcesos.getContenido().add(panelProcesos, BorderLayout.CENTER);
+    zona.add(cardEstadisticas, BorderLayout.NORTH);
+    zona.add(tabsCentro, BorderLayout.CENTER);
 
-        sidebar.add(cardJournal);
-        sidebar.add(cardLocks);
-        sidebar.add(cardProcesos);
+    return zona;
+}
 
-        return sidebar;
-    }
-
+  
     private PanelCard crearZonaLogs() {
         PanelCard card = new PanelCard("Log de Eventos");
         panelLogs = new PanelLogs();
@@ -397,7 +559,95 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
         ));
         return lbl;
     }
+    
+    private void reanudarSimulacion() {
+    if (!simulacionPreparada && !simulacionEnCurso) {
+        mostrarError("No hay una simulación pausada o preparada para reanudar.");
+        return;
+    }
 
+    if (timerSimulacion != null && timerSimulacion.isRunning()) {
+        return;
+    }
+
+    iniciarSimulacion();
+}
+
+private void actualizarVelocidadEnCaliente() {
+    if (timerSimulacion != null && timerSimulacion.isRunning()) {
+        timerSimulacion.setDelay(obtenerDelaySimulacion());
+        timerSimulacion.setInitialDelay(obtenerDelaySimulacion());
+        panelLogs.agregarLog("[SIM] Velocidad cambiada a " + comboVelocidad.getSelectedItem() + ".");
+    }
+}
+
+private void ejecutarCasoInstantaneo() {
+    if (contextoCasoActual == null) {
+        mostrarError("Primero debes cargar un caso JSON.");
+        return;
+    }
+
+    try {
+        if (timerSimulacion != null) {
+            timerSimulacion.stop();
+        }
+
+        simulacionEnCurso = false;
+        simulacionPreparada = false;
+        solicitudActiva = null;
+        indiceSimulacion = 0;
+
+        String politica = comboScheduler.getSelectedItem().toString();
+        ListaEnlazada<SolicitudIO> orden = simuladorPoliticas.planificar(contextoCasoActual, politica);
+
+        vaciarLista(ordenSimulacionActual);
+        for (int i = 0; i < orden.tamano(); i++) {
+            ordenSimulacionActual.agregar(orden.obtener(i));
+        }
+
+        vaciarLista(procesosSistema);
+        for (int i = 0; i < contextoCasoActual.getSolicitudes().tamano(); i++) {
+            SolicitudIO s = contextoCasoActual.getSolicitudes().obtener(i);
+            s.getProceso().setEstado(EstadoProceso.TERMINADO);
+            procesosSistema.agregar(s.getProceso());
+        }
+
+        if (!orden.estaVacia()) {
+            cabezaActual = orden.obtener(orden.tamano() - 1).getPosicionDisco();
+        } else {
+            cabezaActual = contextoCasoActual.getCabezaInicial();
+        }
+
+        int movimientoTotal = simuladorPoliticas.calcularMovimientoTotal(
+                contextoCasoActual.getCabezaInicial(),
+                orden
+        );
+
+        panelLogs.agregarLog("[SIM] Ejecución instantánea.");
+        panelLogs.agregarLog("[SIM] Política: " + politica);
+        panelLogs.agregarLog("[SIM] Orden resultante: " + simuladorPoliticas.formatearOrdenPosiciones(orden));
+        panelLogs.agregarLog("[SIM] Movimiento total: " + movimientoTotal);
+
+        refrescarTodo();
+
+    } catch (Exception ex) {
+        mostrarError("Error en ejecución instantánea: " + ex.getMessage());
+    }
+}
+    
+  private void abrirVentanaProcesos() {
+    if (ventanaProcesos == null || !ventanaProcesos.isDisplayable()) {
+        ventanaProcesos = new VentanaProcesos(procesosSistema);
+    }
+
+    ventanaProcesos.refrescar(
+            procesosSistema,
+            solicitudActiva != null ? solicitudActiva.getProceso() : null
+    );
+    ventanaProcesos.setVisible(true);
+    ventanaProcesos.toFront();
+    ventanaProcesos.repaint();
+}
     private JButton crearBoton(String texto) {
         JButton btn = new JButton(texto);
         btn.setFocusPainted(false);
@@ -410,6 +660,22 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
         ));
         return btn;
     }
+    
+    private void estilizarPopupMenu(JPopupMenu menu) {
+    menu.setBackground(new Color(15, 23, 42));
+    menu.setBorder(BorderFactory.createLineBorder(TemaUI.BORDE_SUAVE, 1));
+}
+
+private JMenuItem crearMenuItem(String texto, java.awt.event.ActionListener accion) {
+    JMenuItem item = new JMenuItem(texto);
+    item.setFont(TemaUI.FUENTE_NORMAL);
+    item.setBackground(new Color(15, 23, 42));
+    item.setForeground(TemaUI.TEXTO);
+    item.setFocusPainted(false);
+    item.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
+    item.addActionListener(accion);
+    return item;
+}
 
     private JButton crearBotonPeligro(String texto) {
         JButton btn = crearBoton(texto);
@@ -425,67 +691,259 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
     }
 
     private void estilizarRadio(JRadioButton radio) {
-        radio.setOpaque(true);
-        radio.setBackground(TemaUI.CARD_2);
-        radio.setForeground(TemaUI.TEXTO);
-        radio.setFont(TemaUI.FUENTE_NORMAL);
-        radio.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
-        radio.setFocusPainted(false);
+    radio.setOpaque(true);
+    radio.setFocusPainted(false);
+    radio.setBackground(new Color(11, 25, 45));
+    radio.setForeground(TemaUI.TEXTO);
+    radio.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+    radio.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(30, 41, 59), 1),
+            BorderFactory.createEmptyBorder(10, 12, 10, 12)
+    ));
+}
+    
+    private void probarJ1Real() {
+    if (rbUsuario.isSelected()) {
+        mostrarError("En modo Usuario no se permite ejecutar J1 real.");
+        return;
     }
 
-    private void estilizarTree(JTree tree) {
-        tree.setBackground(TemaUI.CARD_2);
-        tree.setForeground(TemaUI.TEXTO);
-        tree.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 14));
-        tree.setRowHeight(30);
-        tree.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        tree.setShowsRootHandles(true);
-        tree.setRootVisible(true);
+    String nombre = pedirTexto("Nombre del archivo para J1:");
+    if (nombre == null) return;
 
-        DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer() {
-            @Override
-            public Component getTreeCellRendererComponent(
-                    JTree tree, Object value, boolean sel, boolean expanded,
-                    boolean leaf, int row, boolean hasFocus) {
+    if (sistema.getRoot().buscarHijoPorNombre(nombre) != null) {
+        mostrarError("Ya existe un nodo con ese nombre en el directorio raíz.");
+        return;
+    }
 
-                super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+    String propietario = pedirTexto("Propietario:");
+    if (propietario == null) return;
 
-                setBackgroundSelectionColor(TemaUI.ACENTO);
-                setTextSelectionColor(Color.WHITE);
-                setBackgroundNonSelectionColor(TemaUI.CARD_2);
-                setTextNonSelectionColor(TemaUI.TEXTO);
+    Integer bloques = pedirEnteroPositivo("Cantidad de bloques:");
+    if (bloques == null) return;
 
-                setOpenIcon(null);
-                setClosedIcon(null);
-                setLeafIcon(null);
+    Archivo archivo = new Archivo(nombre, propietario, bloques);
 
-                DefaultMutableTreeNode nodo = (DefaultMutableTreeNode) value;
-                Object obj = nodo.getUserObject();
+    // 1) Registrar CREATE como PENDIENTE en journal
+    EntradaJournal entrada = journal.registrarOperacionPendiente(TipoOperacionIO.CREATE, archivo);
 
-                if (obj instanceof NodoFS) {
-                    NodoFS n = (NodoFS) obj;
+    // 2) Asignar bloques en disco
+    boolean asignado = sistema.getDisco().asignarBloquesAArchivo(archivo);
+    if (!asignado) {
+        panelLogs.agregarLog("[J1] No se pudo asignar espacio para '" + nombre + "'.");
+        refrescarTodo();
+        return;
+    }
 
-                    if (n.getPadre() == null) {
-                        setText("<html><span style='color:#7dd3fc;'>📁 /</span></html>");
-                    } else if (n.esDirectorio()) {
-                        setText("<html><span style='color:#86efac;'>📁 " + n.getNombre() + "</span></html>");
-                    } else {
-                        Archivo archivo = (Archivo) n;
-                        setText("<html><span style='color:#e9f5ff;'>📄 " + archivo.getNombre() +
-                                "</span> <span style='color:#86efac;'>: " +
-                                archivo.getTamanoEnBloques() + " bloques</span></html>");
-                    }
-                } else {
-                    setText(String.valueOf(obj));
-                    setForeground(TemaUI.TEXTO);
-                }
+    // Ahora sí conocemos el primer bloque real
+    entrada.setPrimerBloque(archivo.getPrimerBloque());
 
-                return this;
+    panelLogs.agregarLog("[J1] CREATE registrado como PENDIENTE para '" + nombre + "'.");
+    panelLogs.agregarLog("[J1] Bloques asignados temporalmente. Primer bloque: " + archivo.getPrimerBloque());
+    panelJournal.agregarEvento("[EVENTO] J1 CREATE PENDIENTE: " + nombre);
+
+    // 3) Simular fallo ANTES del commit y ANTES de agregar al árbol
+    panelLogs.agregarLog("[J1] Se simula fallo antes del commit.");
+    panelJournal.agregarEvento("[EVENTO] FALLO J1 ANTES DE COMMIT");
+    panelJournal.marcarFalloSimulado();
+
+    // 4) Recovery hace UNDO de la entrada pendiente
+    journal.recuperarOperacionesPendientes(sistema.getDisco());
+
+    panelLogs.agregarLog("[J1] Recovery ejecutó UNDO sobre '" + nombre + "'.");
+    panelJournal.agregarEvento("[EVENTO] UNDO J1 APLICADO: " + nombre);
+    panelJournal.marcarSistemaNormal();
+
+    // 5) El archivo NO se agrega al árbol porque el commit nunca ocurrió
+    refrescarTodo();
+
+    JOptionPane.showMessageDialog(
+            this,
+            "J1 ejecutado.\nCREATE quedó PENDIENTE, ocurrió el fallo y recovery aplicó UNDO.",
+            "J1 Real",
+            JOptionPane.INFORMATION_MESSAGE
+    );
+}
+    
+private static class FolderIcon implements Icon {
+    private final Color cuerpo;
+    private final Color pestaña;
+
+    public FolderIcon(Color cuerpo, Color pestaña) {
+        this.cuerpo = cuerpo;
+        this.pestaña = pestaña;
+    }
+
+    @Override
+    public int getIconWidth() {
+        return 18;
+    }
+
+    @Override
+    public int getIconHeight() {
+        return 16;
+    }
+
+    @Override
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        g2.setColor(pestaña);
+        g2.fillRoundRect(x + 2, y + 1, 7, 5, 4, 4);
+
+        g2.setColor(cuerpo);
+        g2.fillRoundRect(x + 1, y + 4, 15, 10, 4, 4);
+
+        g2.setColor(new Color(255, 255, 255, 70));
+        g2.drawRoundRect(x + 1, y + 4, 15, 10, 4, 4);
+
+        g2.dispose();
+    }
+}
+
+private static class FileIcon implements Icon {
+    private final Color hoja;
+    private final Color detalle;
+
+    public FileIcon(Color hoja, Color detalle) {
+        this.hoja = hoja;
+        this.detalle = detalle;
+    }
+
+    @Override
+    public int getIconWidth() {
+        return 16;
+    }
+
+    @Override
+    public int getIconHeight() {
+        return 18;
+    }
+
+    @Override
+    public void paintIcon(Component c, Graphics g, int x, int y) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+        g2.setColor(hoja);
+        g2.fillRoundRect(x + 2, y + 1, 11, 15, 3, 3);
+
+        g2.setColor(new Color(203, 213, 225));
+        int[] px = {x + 9, x + 13, x + 13};
+        int[] py = {y + 1, y + 1, y + 5};
+        g2.fillPolygon(px, py, 3);
+
+        g2.setColor(detalle);
+        g2.setStroke(new BasicStroke(1.3f));
+        g2.drawLine(x + 4, y + 8, x + 11, y + 8);
+        g2.drawLine(x + 4, y + 11, x + 10, y + 11);
+
+        g2.setColor(new Color(255, 255, 255, 70));
+        g2.drawRoundRect(x + 2, y + 1, 11, 15, 3, 3);
+
+        g2.dispose();
+    }
+}
+
+private void estilizarTree(JTree tree) {
+    tree.setBackground(new Color(10, 24, 44));
+    tree.setForeground(TemaUI.TEXTO);
+    tree.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+    tree.setRowHeight(24);
+    tree.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+    tree.setShowsRootHandles(true);
+    tree.setRootVisible(true);
+    tree.putClientProperty("JTree.lineStyle", "None");
+    tree.setOpaque(true);
+    tree.setToggleClickCount(1);
+
+    final Icon iconoCarpeta = new FolderIcon(new Color(34, 197, 94), new Color(187, 247, 208));
+    final Icon iconoCarpetaSistema = new FolderIcon(new Color(56, 189, 248), new Color(186, 230, 253));
+    final Icon iconoArchivo = new FileIcon(new Color(226, 232, 240), new Color(56, 189, 248));
+
+    DefaultTreeCellRenderer renderer = new DefaultTreeCellRenderer() {
+        @Override
+        public Component getTreeCellRendererComponent(
+                JTree tree, Object value, boolean sel, boolean expanded,
+                boolean leaf, int row, boolean hasFocus) {
+
+            super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
+
+            setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+
+            Color fondoNormal = new Color(10, 24, 44);
+            Color fondoSeleccion = new Color(37, 99, 235);
+            Color bordeSeleccion = new Color(96, 165, 250);
+
+            if (sel) {
+                setOpaque(true);
+                setBackground(fondoSeleccion);
+                setForeground(Color.WHITE);
+                setBorder(BorderFactory.createCompoundBorder(
+                        BorderFactory.createLineBorder(bordeSeleccion, 1),
+                        BorderFactory.createEmptyBorder(2, 4, 2, 4)
+                ));
+            } else {
+                setOpaque(true);
+                setBackground(fondoNormal);
+                setForeground(TemaUI.TEXTO);
+                setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
             }
-        };
 
-        tree.setCellRenderer(renderer);
-    }
+            DefaultMutableTreeNode nodo = (DefaultMutableTreeNode) value;
+            Object obj = nodo.getUserObject();
+
+            if (obj instanceof NodoFS) {
+                NodoFS n = (NodoFS) obj;
+
+                if (n.getPadre() == null) {
+                    setIcon(iconoCarpetaSistema);
+                    setText("<html><span style='color:#7dd3fc; font-weight:700;'>/</span></html>");
+                } else if (n.esDirectorio()) {
+                    Directorio dir = (Directorio) n;
+                    int hijos = dir.getHijos().tamano();
+
+                    boolean esSistema = "system_files".equalsIgnoreCase(dir.getNombre());
+                    setIcon(esSistema ? iconoCarpetaSistema : iconoCarpeta);
+
+                    String colorNombre = sel ? "#ffffff" : (esSistema ? "#7dd3fc" : "#86efac");
+                    String colorMeta = sel ? "#dbeafe" : "#93c5fd";
+
+                    setText("<html><span style='color:" + colorNombre + "; font-weight:700;'>" +
+                            dir.getNombre() +
+                            "</span> <span style='color:" + colorMeta + "; font-size:10px;'>[" +
+                            hijos + "]</span></html>");
+                } else {
+                    Archivo archivo = (Archivo) n;
+                    setIcon(iconoArchivo);
+
+                    String colorNombre = sel ? "#ffffff" : "#e2e8f0";
+                    String colorMeta = sel ? "#dbeafe" : "#38bdf8";
+
+                    setText("<html><span style='color:" + colorNombre + "; font-weight:600;'>" +
+                            archivo.getNombre() +
+                            "</span> <span style='color:" + colorMeta + "; font-size:10px;'>[" +
+                            archivo.getTamanoEnBloques() + "]</span></html>");
+                }
+            } else {
+                setIcon(null);
+                setText(String.valueOf(obj));
+            }
+
+            return this;
+        }
+    };
+
+    renderer.setBackgroundNonSelectionColor(new Color(10, 24, 44));
+    renderer.setBackgroundSelectionColor(new Color(37, 99, 235));
+    renderer.setTextNonSelectionColor(TemaUI.TEXTO);
+    renderer.setTextSelectionColor(Color.WHITE);
+
+    tree.setCellRenderer(renderer);
+}
+
+
 
     private void estilizarScroll(JScrollPane scroll) {
         scroll.setBorder(BorderFactory.createLineBorder(TemaUI.BORDE, 1));
@@ -685,6 +1143,46 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
         panelLogs.agregarLog("[RENAME] '" + actual + "' renombrado a '" + nuevo + "'.");
         refrescarTodo();
     }
+    
+    private void actualizarPermisosPorRol() {
+    boolean esAdmin = rbAdmin.isSelected();
+
+    btnCargarCaso.setEnabled(esAdmin);
+    btnEjecutarCaso.setEnabled(esAdmin);
+    btnPausar.setEnabled(esAdmin);
+    btnReanudar.setEnabled(esAdmin);
+    btnPaso.setEnabled(esAdmin);
+    btnInstantaneo.setEnabled(esAdmin);
+    comboScheduler.setEnabled(esAdmin);
+    comboVelocidad.setEnabled(esAdmin);
+
+    refrescarEstiloRol();
+}
+    
+    private void refrescarEstiloRol() {
+    aplicarEstiloRadioRol(rbAdmin, rbAdmin.isSelected(), new Color(37, 99, 235));
+    aplicarEstiloRadioRol(rbUsuario, rbUsuario.isSelected(), new Color(16, 185, 129));
+}
+    
+    private void aplicarEstiloRadioRol(JRadioButton radio, boolean seleccionado, Color colorActivo) {
+    if (seleccionado) {
+        radio.setBackground(colorActivo);
+        radio.setForeground(Color.WHITE);
+        radio.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(colorActivo.brighter(), 1),
+                BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+        radio.setFont(new Font("Segoe UI", Font.BOLD, 15));
+    } else {
+        radio.setBackground(new Color(11, 25, 45));
+        radio.setForeground(TemaUI.TEXTO);
+        radio.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(30, 41, 59), 1),
+                BorderFactory.createEmptyBorder(10, 12, 10, 12)
+        ));
+        radio.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+    }
+}
 
     private void eliminarNodoDesdeGUI() {
         if (rbUsuario.isSelected()) {
@@ -735,20 +1233,23 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
     }
 
     private void simularFallo() {
-        panelLogs.agregarLog("[FALLO] Se simuló una falla del sistema.");
-        panelJournal.marcarFalloSimulado();
+    panelLogs.agregarLog("[FALLO] Se simuló una falla del sistema.");
+    panelJournal.agregarEvento("[EVENTO] FALLO SIMULADO");
+    panelJournal.marcarFalloSimulado();
 
-        journal.recuperarOperacionesPendientes(sistema.getDisco());
+    journal.recuperarOperacionesPendientes(sistema.getDisco());
 
-        panelLogs.agregarLog("[RECOVERY] Recuperación ejecutada desde journal.");
-        panelJournal.marcarSistemaNormal();
+    panelLogs.agregarLog("[RECOVERY] Recuperación ejecutada desde journal.");
+    panelJournal.agregarEvento("[EVENTO] RECOVERY EJECUTADA");
+    panelJournal.marcarSistemaNormal();
 
-        refrescarTodo();
-        JOptionPane.showMessageDialog(this,
-                "Fallo simulado y recuperación ejecutada desde el journal.",
-                "Simulación",
-                JOptionPane.INFORMATION_MESSAGE);
-    }
+    refrescarTodo();
+
+    JOptionPane.showMessageDialog(this,
+            "Fallo simulado y recuperación ejecutada desde el journal.",
+            "Simulación",
+            JOptionPane.INFORMATION_MESSAGE);
+}
 
     private Proceso crearProceso(String nombre) {
         Proceso proceso = new Proceso(siguientePid++, nombre);
@@ -912,10 +1413,21 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
         actualizarEstadisticas();
         panelDisco.repaint();
         panelJournal.refrescar(journal);
-        panelProcesos.refrescar(procesosSistema);
+        panelProcesos.refrescar(procesosSistema, solicitudActiva != null ? solicitudActiva.getProceso() : null);
         panelLocksActivos.refrescar(gestorLocks);
         panelSolicitudesIO.refrescar(historialSolicitudes);
         panelBarraCabezal.actualizar(cabezaActual, sistema.getDisco().getCantidadBloques(), comboScheduler.getSelectedItem().toString());
+        if (ventanaProcesos != null && ventanaProcesos.isDisplayable()) {
+    SwingUtilities.invokeLater(() -> {
+        ventanaProcesos.refrescar(
+                procesosSistema,
+                solicitudActiva != null ? solicitudActiva.getProceso() : null
+        );
+        ventanaProcesos.revalidate();
+        ventanaProcesos.repaint();
+    });
+
+}
     }
 
     private void actualizarArbol() {
@@ -1039,4 +1551,308 @@ panelDiscoCompleto.add(cardDiscoInterno, BorderLayout.CENTER);
         lblSolicitudes.setText("<html><div style='padding:6px'><span style='color:#38bdf8;'>Solicitudes</span><br><span style='font-size:22px; color:#ebf1fa; font-weight:bold;'>"
                 + historialSolicitudes.tamano() + "</span></div></html>");
     }
+    
+   private void cargarCasoDesdeJSON() {
+    JFileChooser chooser = new JFileChooser();
+    chooser.setDialogTitle("Seleccionar caso de prueba JSON");
+    chooser.setFileFilter(new FileNameExtensionFilter("Archivos JSON", "json"));
+
+    int resultado = chooser.showOpenDialog(this);
+    if (resultado != JFileChooser.APPROVE_OPTION) {
+        return;
+    }
+
+    try {
+        String ruta = chooser.getSelectedFile().getAbsolutePath();
+
+        CargadorCasoJSON cargador = new CargadorCasoJSON();
+        CasoPrueba caso = cargador.cargarDesdeArchivo(ruta);
+
+        AplicadorCasoPrueba aplicador = new AplicadorCasoPrueba(sistema);
+        ContextoCasoPrueba contexto = aplicador.aplicar(caso);
+
+        this.casoPruebaActual = caso;
+        this.contextoCasoActual = contexto;
+        this.cabezaActual = contexto.getCabezaInicial();
+
+        vaciarLista(solicitudesActualesCaso);
+        vaciarLista(procesosSistema);
+
+        for (int i = 0; i < contexto.getSolicitudes().tamano(); i++) {
+            SolicitudIO solicitud = contexto.getSolicitudes().obtener(i);
+
+            solicitudesActualesCaso.agregar(solicitud);
+            historialSolicitudes.agregar(solicitud);
+            procesosSistema.agregar(solicitud.getProceso());
+        }
+
+       panelLogs.agregarLog("[CASO] Caso cargado: " + caso.getTestId());
+panelLogs.agregarLog("[CASO] Cabezal inicial: " + contexto.getCabezaInicial());
+panelLogs.agregarLog("[CASO] Dirección: " + (contexto.isHaciaArriba() ? "UP" : "DOWN"));
+panelLogs.agregarLog("[CASO] Solicitudes cargadas: " + contexto.getSolicitudes().tamano());
+
+panelJournal.agregarEvento("[EVENTO] CASO CARGADO: " + caso.getTestId());
+
+        refrescarTodo();
+
+    } catch (Exception ex) {
+        mostrarError("Error al cargar el caso JSON: " + ex.getMessage());
+    }
+}
+
+private void ejecutarCasoActual() {
+    if (contextoCasoActual == null) {
+        mostrarError("Primero debes cargar un caso JSON.");
+        return;
+    }
+
+    try {
+        if (!simulacionPreparada && !simulacionEnCurso) {
+            prepararSimulacionPasoAPaso();
+        }
+        iniciarSimulacion();
+
+    } catch (Exception ex) {
+        mostrarError("Error al ejecutar el caso: " + ex.getMessage());
+    }
+}
+
+private void prepararSimulacionPasoAPaso() {
+    String politica = comboScheduler.getSelectedItem().toString();
+
+    vaciarLista(ordenSimulacionActual);
+
+    ListaEnlazada<SolicitudIO> orden = simuladorPoliticas.planificar(contextoCasoActual, politica);
+    for (int i = 0; i < orden.tamano(); i++) {
+        ordenSimulacionActual.agregar(orden.obtener(i));
+    }
+
+    indiceSimulacion = 0;
+    solicitudActiva = null;
+    simulacionPreparada = true;
+    simulacionEnCurso = false;
+
+    cabezaActual = contextoCasoActual.getCabezaInicial();
+
+    vaciarLista(procesosSistema);
+    for (int i = 0; i < contextoCasoActual.getSolicitudes().tamano(); i++) {
+        SolicitudIO s = contextoCasoActual.getSolicitudes().obtener(i);
+        s.getProceso().setEstado(EstadoProceso.LISTO);
+        procesosSistema.agregar(s.getProceso());
+    }
+
+    panelLogs.agregarLog("[SIM] Simulación preparada.");
+    panelLogs.agregarLog("[SIM] Política: " + politica);
+    panelLogs.agregarLog("[SIM] Orden planificado: " + simuladorPoliticas.formatearOrdenPosiciones(ordenSimulacionActual));
+
+    refrescarTodo();
+}
+
+
+private void iniciarSimulacion() {
+    if (!simulacionPreparada) {
+        mostrarError("Primero debes preparar o cargar un caso.");
+        return;
+    }
+
+    if (simulacionEnCurso) {
+        return;
+    }
+
+    int delay = obtenerDelaySimulacion();
+
+    timerSimulacion = new Timer(delay, new ActionListener() {
+        @Override
+        public void actionPerformed(ActionEvent e) {
+            ejecutarTickSimulacion();
+        }
+    });
+
+    simulacionEnCurso = true;
+    timerSimulacion.start();
+    panelLogs.agregarLog("[SIM] Simulación iniciada/reanudada a velocidad " + comboVelocidad.getSelectedItem() + ".");
+}
+
+private void pausarSimulacion() {
+    if (timerSimulacion != null && timerSimulacion.isRunning()) {
+        timerSimulacion.stop();
+        simulacionEnCurso = false;
+        panelLogs.agregarLog("[SIM] Simulación pausada.");
+    }
+}
+
+
+
+private void ejecutarPasoManual() {
+    if (!simulacionPreparada) {
+        if (contextoCasoActual == null) {
+            mostrarError("Primero debes cargar un caso JSON.");
+            return;
+        }
+        prepararSimulacionPasoAPaso();
+    }
+
+    if (timerSimulacion != null && timerSimulacion.isRunning()) {
+        timerSimulacion.stop();
+        simulacionEnCurso = false;
+    }
+
+    ejecutarTickSimulacion();
+}
+
+private void ejecutarTickSimulacion() {
+    if (!simulacionPreparada) {
+        return;
+    }
+
+    if (solicitudActiva == null) {
+        if (indiceSimulacion >= ordenSimulacionActual.tamano()) {
+            finalizarSimulacionPasoAPaso();
+            return;
+        }
+
+        solicitudActiva = ordenSimulacionActual.obtener(indiceSimulacion);
+
+        Proceso proceso = solicitudActiva.getProceso();
+        proceso.setEstado(EstadoProceso.EJECUTANDO);
+
+        gestorLocks.solicitarLock(solicitudActiva);
+
+        panelLogs.agregarLog("[SIM] Atendiendo solicitud #" + solicitudActiva.getIdSolicitud()
+                + " | " + solicitudActiva.getTipoOperacion()
+                + " | Archivo: " + solicitudActiva.getNombreArchivo()
+                + " | Posición: " + solicitudActiva.getPosicionDisco());
+
+        panelJournal.agregarEvento("[EVENTO] ACCESO: " + solicitudActiva.getNombreArchivo()
+                + " @ " + solicitudActiva.getPosicionDisco());
+
+        refrescarTodo();
+        return;
+    }
+
+    cabezaActual = solicitudActiva.getPosicionDisco();
+
+    gestorLocks.liberarLock(solicitudActiva);
+
+    Proceso proceso = solicitudActiva.getProceso();
+    proceso.setEstado(EstadoProceso.TERMINADO);
+
+    panelLogs.agregarLog("[SIM] Solicitud completada. Cabezal movido a " + cabezaActual + ".");
+
+    solicitudActiva = null;
+    indiceSimulacion++;
+
+    refrescarTodo();
+
+    if (indiceSimulacion >= ordenSimulacionActual.tamano()) {
+        finalizarSimulacionPasoAPaso();
+    }
+}
+
+private void finalizarSimulacionPasoAPaso() {
+    if (timerSimulacion != null) {
+        timerSimulacion.stop();
+    }
+
+    simulacionEnCurso = false;
+    simulacionPreparada = false;
+
+    int movimientoTotal = simuladorPoliticas.calcularMovimientoTotal(
+            contextoCasoActual.getCabezaInicial(),
+            ordenSimulacionActual
+    );
+
+    panelLogs.agregarLog("[SIM] Simulación finalizada.");
+    panelLogs.agregarLog("[SIM] Movimiento total: " + movimientoTotal);
+
+    refrescarTodo();
+}
+
+private int obtenerDelaySimulacion() {
+    String velocidad = comboVelocidad.getSelectedItem().toString();
+
+    switch (velocidad) {
+        case "Lenta":
+            return 1500;
+        case "Rápida":
+            return 450;
+        case "Media":
+        default:
+            return 850;
+    }
+}
+
+private <T> void vaciarLista(ListaEnlazada<T> lista) {
+    while (lista.tamano() > 0) {
+        lista.eliminar(0);
+    }
+}
+private void limpiarDiscoCompleto() {
+    try {
+        if (timerSimulacion != null) {
+            timerSimulacion.stop();
+        }
+
+        simulacionEnCurso = false;
+        simulacionPreparada = false;
+        solicitudActiva = null;
+        indiceSimulacion = 0;
+
+        sistema.getDisco().limpiarDisco();
+
+        vaciarLista(historialSolicitudes);
+        vaciarLista(solicitudesActualesCaso);
+        vaciarLista(ordenSimulacionActual);
+        vaciarLista(procesosSistema);
+
+        while (sistema.getRoot().getHijos().tamano() > 0) {
+            NodoFS hijo = sistema.getRoot().getHijos().obtener(0);
+            sistema.getRoot().eliminarHijoPorNombre(hijo.getNombre());
+        }
+
+        this.casoPruebaActual = null;
+        this.contextoCasoActual = null;
+        this.cabezaActual = 0;
+
+        panelLogs.limpiar();
+        panelJournal.limpiarEventos();
+        panelJournal.marcarSistemaNormal();
+
+        panelLogs.agregarLog("[RESET] Disco, árbol, solicitudes y procesos reiniciados.");
+        refrescarTodo();
+
+    } catch (Exception ex) {
+        mostrarError("Error al limpiar el disco: " + ex.getMessage());
+    }
+}
+
+
+private JPanel crearPanelBotonCentral(JButton boton) {
+    JPanel panel = new JPanel(new GridBagLayout());
+    panel.setOpaque(false);
+    panel.add(boton);
+    return panel;
+}
+
+private void abrirPestanaCentro(String nombrePestana) {
+    if (tabsCentro == null) {
+        return;
+    }
+
+    for (int i = 0; i < tabsCentro.getTabCount(); i++) {
+        if (tabsCentro.getTitleAt(i).equalsIgnoreCase(nombrePestana)) {
+            tabsCentro.setSelectedIndex(i);
+            return;
+        }
+    }
+}
+private JMenuItem crearMenuTitulo(String texto) {
+    JMenuItem item = new JMenuItem(texto);
+    item.setEnabled(false);
+    item.setFont(new Font("Segoe UI", Font.BOLD, 13));
+    item.setBackground(new Color(15, 23, 42));
+    item.setForeground(new Color(125, 211, 252));
+    item.setBorder(BorderFactory.createEmptyBorder(8, 12, 6, 12));
+    return item;
+}
 }

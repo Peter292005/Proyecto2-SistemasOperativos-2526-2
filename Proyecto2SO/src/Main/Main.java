@@ -17,7 +17,7 @@ import javax.swing.SwingUtilities;
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            SistemaArchivos sistema = new SistemaArchivos(100);
+            SistemaArchivos sistema = new SistemaArchivos(1024);
             JournalManager journal = new JournalManager();
 
             VentanaPrincipal ventana = new VentanaPrincipal(sistema, journal);

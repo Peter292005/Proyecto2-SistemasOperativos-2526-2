@@ -15,11 +15,13 @@ import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 
 public class PanelSolicitudesIO extends JPanel {
     private final DefaultTableModel modelo;
@@ -48,6 +50,7 @@ public class PanelSolicitudesIO extends JPanel {
         tabla.setRowHeight(28);
         tabla.setFont(TemaUI.FUENTE_NORMAL);
         tabla.setShowVerticalLines(false);
+        tabla.setFillsViewportHeight(true);
 
         tabla.getTableHeader().setBackground(TemaUI.CARD_3);
         tabla.getTableHeader().setForeground(TemaUI.TEXTO);
@@ -90,7 +93,14 @@ public class PanelSolicitudesIO extends JPanel {
         scroll.setBorder(BorderFactory.createLineBorder(TemaUI.BORDE, 1));
         scroll.getViewport().setBackground(TemaUI.CARD_2);
 
+        scroll.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.getHorizontalScrollBar().setUnitIncrement(16);
+
         add(scroll, BorderLayout.CENTER);
+
+        setPreferredSize(new Dimension(700, 320));
     }
 
     public void refrescar(ListaEnlazada<SolicitudIO> solicitudes) {

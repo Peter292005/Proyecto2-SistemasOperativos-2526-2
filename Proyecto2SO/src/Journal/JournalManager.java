@@ -102,4 +102,5 @@ public class JournalManager {
     public String toString() {
         return entradas.toString();
     }
+  
 }

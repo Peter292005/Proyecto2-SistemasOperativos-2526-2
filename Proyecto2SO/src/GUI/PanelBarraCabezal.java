@@ -17,7 +17,7 @@ import java.awt.RenderingHints;
 
 public class PanelBarraCabezal extends JPanel {
     private int posicionCabezal = 0;
-    private int totalBloques = 32;
+    private int totalBloques = 256;
     private String politica = "FIFO";
 
     public PanelBarraCabezal() {
@@ -42,31 +42,53 @@ public class PanelBarraCabezal extends JPanel {
         int w = getWidth();
         int h = getHeight();
 
-        int margenX = 30;
-        int barraY = h / 2;
-        int barraW = w - 2 * margenX;
+        int cardX = 12;
+        int cardY = 10;
+        int cardW = w - 24;
+        int cardH = h - 20;
+
+        g2.setColor(new Color(8, 18, 36));
+        g2.fillRoundRect(cardX, cardY, cardW, cardH, 18, 18);
+
+        g2.setColor(new Color(255, 255, 255, 25));
+        g2.drawRoundRect(cardX, cardY, cardW, cardH, 18, 18);
+
+        g2.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        g2.setColor(new Color(230, 238, 248));
+        g2.drawString("Política activa: " + politica, 28, 34);
+        g2.drawString("Cabezal actual: " + posicionCabezal, 260, 34);
+
+        int barraX = 28;
+        int barraY = h / 2 + 8;
+        int barraW = w - 56;
+        int barraH = 12;
+
+        g2.setColor(new Color(15, 30, 52));
+        g2.fillRoundRect(barraX, barraY, barraW, barraH, 14, 14);
 
         g2.setColor(new Color(34, 211, 238, 70));
-        g2.fillRoundRect(margenX, barraY - 5, barraW, 10, 10, 10);
+        g2.fillRoundRect(barraX, barraY, barraW, barraH, 14, 14);
 
         g2.setColor(new Color(34, 211, 238));
-        g2.fillRoundRect(margenX, barraY - 3, barraW, 6, 10, 10);
+        g2.fillRoundRect(barraX, barraY + 3, barraW, 6, 14, 14);
 
-        int xCabezal = margenX + (int) ((barraW * 1.0 * posicionCabezal) / Math.max(1, totalBloques - 1));
+        int xCabezal = barraX + (int) ((barraW * 1.0 * posicionCabezal) / Math.max(1, totalBloques - 1));
+
+        g2.setColor(new Color(250, 204, 21, 80));
+        g2.fillOval(xCabezal - 14, barraY - 10, 28, 28);
 
         g2.setColor(new Color(250, 204, 21));
-        g2.fillOval(xCabezal - 9, barraY - 9, 18, 18);
+        g2.fillOval(xCabezal - 9, barraY - 5, 18, 18);
+
         g2.setColor(Color.WHITE);
-        g2.drawOval(xCabezal - 9, barraY - 9, 18, 18);
+        g2.drawOval(xCabezal - 9, barraY - 5, 18, 18);
 
-        g2.setColor(TemaUI.TEXTO);
         g2.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        g2.drawString("0", margenX - 5, barraY + 24);
-        g2.drawString(String.valueOf(totalBloques - 1), margenX + barraW - 10, barraY + 24);
+        g2.setColor(new Color(230, 238, 248));
+        g2.drawString("0", barraX - 2, barraY + 28);
 
-        g2.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        g2.drawString("Política activa: " + politica, margenX, 20);
-        g2.drawString("Cabezal actual: " + posicionCabezal, margenX + 220, 20);
+        String ultimo = String.valueOf(totalBloques - 1);
+        g2.drawString(ultimo, barraX + barraW - 18, barraY + 28);
 
         g2.dispose();
     }
