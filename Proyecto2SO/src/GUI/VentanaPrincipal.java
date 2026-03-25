@@ -95,6 +95,7 @@ public class VentanaPrincipal extends JFrame {
     private int siguientePid = 1;
     private int siguienteSolicitudId = 1;
     private int cabezaActual = 0;
+    private final String usuarioActual = "usuario";
 
     private JTree arbol;
     private DefaultTreeModel modeloArbol;
@@ -326,6 +327,58 @@ btnMenu.addActionListener(e -> {
     header.add(filaInferior, BorderLayout.CENTER);
 
     return header;
+}
+  private boolean esAdministrador() {
+    return rbAdmin.isSelected();
+}
+
+private boolean esNodoDelSistema(NodoFS nodo) {
+    if (nodo == null) return false;
+    String ruta = nodo.getRutaCompleta();
+    return ruta != null && ruta.startsWith("/system_files");
+}
+
+private boolean usuarioPuedeLeer(NodoFS nodo) {
+    if (nodo == null) return false;
+    if (esAdministrador()) return true;
+    if (esNodoDelSistema(nodo)) return false;
+
+    return usuarioActual.equalsIgnoreCase(nodo.getPropietario()) || nodo.esPublico();
+}
+
+private boolean usuarioPuedeModificar(NodoFS nodo) {
+    if (nodo == null) return false;
+    if (esAdministrador()) return true;
+    if (esNodoDelSistema(nodo)) return false;
+
+    return usuarioActual.equalsIgnoreCase(nodo.getPropietario());
+}
+
+private boolean usuarioPuedeCrearEn(Directorio dir) {
+    if (dir == null) return false;
+    if (esAdministrador()) return true;
+    if (esNodoDelSistema(dir)) return false;
+
+    return usuarioActual.equalsIgnoreCase(dir.getPropietario())
+            || "/".equals(dir.getRutaCompleta());
+}
+
+private void validarLectura(NodoFS nodo) {
+    if (!usuarioPuedeLeer(nodo)) {
+        throw new SecurityException("El modo Usuario solo puede leer archivos propios o públicos.");
+    }
+}
+
+private void validarModificacion(NodoFS nodo) {
+    if (!usuarioPuedeModificar(nodo)) {
+        throw new SecurityException("El modo Usuario no puede modificar archivos del sistema ni archivos de otros usuarios.");
+    }
+}
+
+private void validarCreacionEn(Directorio dir) {
+    if (!usuarioPuedeCrearEn(dir)) {
+        throw new SecurityException("El modo Usuario solo puede crear elementos en ubicaciones permitidas.");
+    }
 }
   
     private JSplitPane crearCentro() {
@@ -982,22 +1035,22 @@ private void estilizarTree(JTree tree) {
         }
     }
 
-    private void alSeleccionarNodo(TreeSelectionEvent e) {
-        DefaultMutableTreeNode nodoSeleccionado = (DefaultMutableTreeNode) arbol.getLastSelectedPathComponent();
+   private void alSeleccionarNodo(TreeSelectionEvent e) {
+    DefaultMutableTreeNode seleccionado = (DefaultMutableTreeNode) arbol.getLastSelectedPathComponent();
+    if (seleccionado == null) return;
 
-        if (nodoSeleccionado == null) {
-            panelPropiedadesNodo.mostrarNodo(null);
-            return;
-        }
+    Object obj = seleccionado.getUserObject();
+    if (!(obj instanceof NodoFS)) return;
 
-        Object obj = nodoSeleccionado.getUserObject();
+    NodoFS nodo = (NodoFS) obj;
 
-        if (obj instanceof NodoFS) {
-            panelPropiedadesNodo.mostrarNodo((NodoFS) obj);
-        } else {
-            panelPropiedadesNodo.mostrarNodo(null);
-        }
+    if (!esAdministrador() && !usuarioPuedeLeer(nodo)) {
+        panelPropiedadesNodo.mostrarRestringido();
+        return;
     }
+
+    panelPropiedadesNodo.mostrarNodo(nodo);
+}
 
     private void crearArchivoDesdeGUI() {
         if (rbUsuario.isSelected()) {
@@ -1009,13 +1062,19 @@ private void estilizarTree(JTree tree) {
         if (nombre == null) return;
 
         Directorio directorioDestino = obtenerDirectorioDestinoDesdeSeleccion();
+        try {
+    validarCreacionEn(directorioDestino);
+} catch (SecurityException ex) {
+    mostrarError(ex.getMessage());
+    return;
+}
         if (buscarHijoPorNombreEnDirectorio(directorioDestino, nombre) != null) {
             mostrarError("Ya existe un nodo con ese nombre en el directorio seleccionado.");
             return;
         }
 
-        String propietario = pedirTexto("Propietario:");
-        if (propietario == null) return;
+        String propietario = esAdministrador() ? pedirTexto("Propietario:") : usuarioActual;
+if (propietario == null) return;
 
         Integer bloques = pedirEnteroPositivo("Cantidad de bloques:");
         if (bloques == null) return;
@@ -1028,6 +1087,17 @@ private void estilizarTree(JTree tree) {
         gestorLocks.solicitarLock(solicitud);
 
         Archivo archivo = new Archivo(nombre, propietario, bloques);
+        boolean publico = false;
+if (esAdministrador()) {
+    int resp = JOptionPane.showConfirmDialog(
+            this,
+            "¿El archivo será público?",
+            "Visibilidad",
+            JOptionPane.YES_NO_OPTION
+    );
+    publico = (resp == JOptionPane.YES_OPTION);
+}
+archivo.setPublico(publico);
         boolean asignado = sistema.getDisco().asignarBloquesAArchivo(archivo);
 
         if (!asignado) {
@@ -1065,13 +1135,19 @@ private void estilizarTree(JTree tree) {
         if (nombre == null) return;
 
         Directorio directorioDestino = obtenerDirectorioDestinoDesdeSeleccion();
+        try {
+    validarCreacionEn(directorioDestino);
+} catch (SecurityException ex) {
+    mostrarError(ex.getMessage());
+    return;
+}
         if (buscarHijoPorNombreEnDirectorio(directorioDestino, nombre) != null) {
             mostrarError("Ya existe un nodo con ese nombre en el directorio seleccionado.");
             return;
         }
 
-        String propietario = pedirTexto("Propietario:");
-        if (propietario == null) return;
+       String propietario = esAdministrador() ? pedirTexto("Propietario:") : usuarioActual;
+if (propietario == null) return;
 
         Proceso proceso = crearProceso("PROC_MKDIR_" + nombre);
         registrarSolicitud(proceso, TipoOperacionIO.CREATE, nombre, cabezaActual);
@@ -1079,6 +1155,17 @@ private void estilizarTree(JTree tree) {
         proceso.setEstado(EstadoProceso.EJECUTANDO);
 
         Directorio dir = new Directorio(nombre, propietario);
+        boolean publico = false;
+if (esAdministrador()) {
+    int resp = JOptionPane.showConfirmDialog(
+            this,
+            "¿El directorio será público?",
+            "Visibilidad",
+            JOptionPane.YES_NO_OPTION
+    );
+    publico = (resp == JOptionPane.YES_OPTION);
+}
+dir.setPublico(publico);
         directorioDestino.agregarHijo(dir);
 
         proceso.setEstado(EstadoProceso.TERMINADO);
@@ -1091,6 +1178,17 @@ private void estilizarTree(JTree tree) {
 
     private void leerNodoDesdeGUI() {
         NodoFS nodo = obtenerNodoSeleccionado();
+        if (nodo == null) {
+    mostrarError("Selecciona un nodo.");
+    return;
+}
+
+try {
+    validarLectura(nodo);
+} catch (SecurityException ex) {
+    mostrarError(ex.getMessage());
+    return;
+}
         if (nodo == null) {
             mostrarError("Debes seleccionar un archivo o directorio.");
             return;
@@ -1119,6 +1217,17 @@ private void estilizarTree(JTree tree) {
         }
 
         NodoFS nodo = obtenerNodoSeleccionado();
+        if (nodo == null) {
+    mostrarError("Selecciona un nodo.");
+    return;
+}
+
+try {
+    validarModificacion(nodo);
+} catch (SecurityException ex) {
+    mostrarError(ex.getMessage());
+    return;
+}
         if (nodo == null || nodo.getPadre() == null) {
             mostrarError("Debes seleccionar un archivo o directorio válido para renombrar.");
             return;
@@ -1157,6 +1266,7 @@ private void estilizarTree(JTree tree) {
     comboVelocidad.setEnabled(esAdmin);
 
     refrescarEstiloRol();
+    refrescarTodo();
 }
     
     private void refrescarEstiloRol() {
@@ -1191,6 +1301,17 @@ private void estilizarTree(JTree tree) {
         }
 
         NodoFS nodo = obtenerNodoSeleccionado();
+        if (nodo == null) {
+    mostrarError("Selecciona un nodo.");
+    return;
+}
+
+try {
+    validarModificacion(nodo);
+} catch (SecurityException ex) {
+    mostrarError(ex.getMessage());
+    return;
+}
         if (nodo == null || nodo.getPadre() == null) {
             mostrarError("Debes seleccionar un archivo o directorio válido para eliminar.");
             return;
@@ -1431,27 +1552,48 @@ private void estilizarTree(JTree tree) {
     }
 
     private void actualizarArbol() {
-        DefaultMutableTreeNode raizVisual = construirNodoVisual(sistema.getRoot());
-        modeloArbol.setRoot(raizVisual);
-        modeloArbol.reload();
+    DefaultMutableTreeNode raizVisual = construirNodoVisual(sistema.getRoot());
 
-        for (int i = 0; i < arbol.getRowCount(); i++) {
-            arbol.expandRow(i);
-        }
+    if (raizVisual == null) {
+        raizVisual = new DefaultMutableTreeNode(sistema.getRoot());
     }
+
+    modeloArbol.setRoot(raizVisual);
+    modeloArbol.reload();
+
+    for (int i = 0; i < arbol.getRowCount(); i++) {
+        arbol.expandRow(i);
+    }
+}
+    private boolean nodoVisibleParaRol(NodoFS nodo) {
+    if (nodo == null) return false;
+    if (esAdministrador()) return true;
+    if (nodo.getPadre() == null) return true;
+    if (esNodoDelSistema(nodo)) return false;
+
+    return usuarioActual.equalsIgnoreCase(nodo.getPropietario()) || nodo.esPublico();
+}
 
     private DefaultMutableTreeNode construirNodoVisual(NodoFS nodo) {
-        DefaultMutableTreeNode visual = new DefaultMutableTreeNode(nodo);
+    if (!nodoVisibleParaRol(nodo)) {
+        return null;
+    }
 
-        if (nodo.esDirectorio()) {
-            Directorio dir = (Directorio) nodo;
-            for (int i = 0; i < dir.getHijos().tamano(); i++) {
-                visual.add(construirNodoVisual(dir.getHijos().obtener(i)));
+    DefaultMutableTreeNode visual = new DefaultMutableTreeNode(nodo);
+
+    if (nodo.esDirectorio()) {
+        Directorio dir = (Directorio) nodo;
+        for (int i = 0; i < dir.getHijos().tamano(); i++) {
+            NodoFS hijo = dir.getHijos().obtener(i);
+            DefaultMutableTreeNode hijoVisual = construirNodoVisual(hijo);
+            if (hijoVisual != null) {
+                visual.add(hijoVisual);
             }
         }
-
-        return visual;
     }
+
+    return visual;
+}
 
     private void actualizarTablaAsignacion() {
         modeloTablaAsignacion.setRowCount(0);

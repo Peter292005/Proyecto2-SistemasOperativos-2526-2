@@ -59,6 +59,14 @@ public class PanelPropiedadesNodo extends JPanel {
         lbl.setBorder(new EmptyBorder(8, 10, 8, 10));
         return lbl;
     }
+    public void mostrarRestringido() {
+    lblTipo.setText("Tipo: Restringido");
+    lblNombre.setText("Nombre: Acceso denegado");
+    lblPropietario.setText("Propietario: -");
+    lblRuta.setText("Ruta: -");
+    lblTamano.setText("Tamaño (bloques): -");
+    lblPrimerBloque.setText("Primer bloque: -");
+}
 
     public void mostrarNodo(NodoFS nodo) {
         if (nodo == null) {

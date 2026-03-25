@@ -13,11 +13,13 @@ public abstract class NodoFS {
     private String nombre;
     private String propietario;
     private Directorio padre;
+    private boolean publico;
 
     public NodoFS(String nombre, String propietario) {
         this.nombre = nombre;
         this.propietario = propietario;
         this.padre = null;
+        this.publico = false;
     }
 
     public String getNombre() {
@@ -52,4 +54,12 @@ public abstract class NodoFS {
     }
 
     public abstract boolean esDirectorio();
+    
+    public boolean esPublico() {
+    return publico;
+}
+
+public void setPublico(boolean publico) {
+    this.publico = publico;
+}
 }
